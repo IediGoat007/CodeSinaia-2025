@@ -24,14 +24,16 @@ def gen_qr(user_id):
 
     secret = base64.b32encode(generate_shared_secret()).decode('utf-8')     # generate secret key
     
-    # TODO: combine code# and user id to create URI (hint: match example URI format given above)
-    uri = None
+    # combine code# and user id to create URI (hint: match example URI format given above)
+    uri = code1 + user_id + code2 + secret + code3
     print(" >> URI generated: ", uri)
 
-    # TODO: store secret into a file named "secret.txt"
-    file = None
+    # store secret into a file named "secret.txt"
+    file = open("secret.txt", "w")
+    file.write(secret)
+    file.close() 
 
-    # TODO: generate QR code based on the URI using snego library
+    # generate QR code based on the URI using snego library
     qrcode = segno.make(uri, micro=False)
     qrcode.save('qr_code.png')
 
@@ -43,9 +45,9 @@ def generate_otp(secret_base32, digits=6, time_step=30):
     # decode the base32-encoded secret string into raw bytes
     key = base64.b32decode(secret_base32, casefold=True)
 
-    # TODO: get the current time step
-    current_time = None
-    counter = None
+    # get the current time step
+    current_time = int(time.time())
+    counter = current_time // time_step
 
     # convert the counter to an 8-byte big-endian byte array
     counter_bytes = struct.pack(">Q", counter)
@@ -57,26 +59,26 @@ def generate_otp(secret_base32, digits=6, time_step=30):
     # this chooses where to start slicing the hash
     offset = hmac_hash[-1] & 0x0F       # value between 0 and 15
 
-    # TODO: take 4 bytes of hmac hash starting at the offset
-    selected_bytes = None
+    # take 4 bytes of hmac hash starting at the offset
+    selected_bytes = hmac_hash[offset:offset+4]
 
     # convert those 4 bytes to a big-endian integer
     code_int = struct.unpack(">I", selected_bytes)[0]
 
-    # TODO: remove the sign bit; Hint: 0x7FFFFFFF = 0111 1111 1111 1111 1111 1111 1111 1111
-    code_int = None
+    # remove the sign bit; Hint: 0x7FFFFFFF = 0111 1111 1111 1111 1111 1111 1111 1111
+    code_int = code_int & 0x7FFFFFFF
 
-    # TODO: get only 6 digits; Hint: mod 10^?
-    otp = None
+    # get only 6 digits; Hint: mod 10^?
+    otp = code_int % (10 ** digits)
 
     return otp
 
 
 # ========= function for displaying OPT every 30 sec ========
 def get_otp(t=30):
-    # TODO: open and read file containing secret; Hint: use readline
-    file = None
-    secret = None
+    # open and read file containing secret; Hint: use readline
+    file = open("secret.txt", "r")
+    secret = file.readline()
     file.close()
 
     while True:
@@ -84,8 +86,8 @@ def get_otp(t=30):
         print(" > Generated OTP:", otp, "valid for", int(t-(time.time()%t))+1, "seconds")
         # loop for waiting 30 sec between OTP generation
         for _ in tqdm (range(int(t-(time.time()%t))+1), 
-               desc="Loading…", 
-               ascii=False, ncols=75):
+                desc="Loading…", 
+                ascii=False, ncols=75):
             time.sleep(1)
 
 
@@ -99,4 +101,3 @@ if __name__ == '__main__':
         get_otp()
     else:
         print(" >> Invalid flag: can either be \"--generate-qr [user_id]\" or \"--get-otp\"")
-   

@@ -3,57 +3,130 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 threshold = 0.05
+batch_size = 1000
 
-# Returns 1 for positive pion (211), -1 for negative pion (-211), 0 otherwise
+
 def check_type(pdg_code):
-    pass  # TODO: Implement this function
+    if pdg_code == 211:
+        return 1
+    elif pdg_code == -211:
+        return -1
+    return 0
 
-# Returns the Poisson uncertainty for a given average
 def poisson_distribution(average):
-    pass  # TODO: Implement this function
+    return math.sqrt(average)
 
-# Returns the absolute difference between two numbers
 def difference(no_1, no_2):
-    pass  # TODO: Implement this function
+    return abs(no_1 - no_2)
 
-# Returns the combined uncertainty for two numbers
 def combined_uncertainty(no_1, no_2):
-    pass  # TODO: Implement this function
+    return math.sqrt(poisson_distribution(no_1)**2 + poisson_distribution(no_2)**2)
 
-# Returns the significance of the difference
 def significance(no_1, no_2, comb_uncertainty):
-    pass  # TODO: Implement this function
+    if comb_uncertainty == 0:
+        return float('inf')
+    return difference(no_1, no_2) / comb_uncertainty
 
-# TODO: Open the input file, read the first line to get event_id and num_particles,
-#       then read the rest of the lines into lines_list as lists of strings.
-#       Handle FileNotFoundError and IOError with appropriate messages--> handle file errors.
 
-# TODO: Loop through each particle in lines_list, convert values to float,
-#       use check_type to count positive and negative pions per event.
+def read_events(filename):
+    try:
+        with open(filename, "r") as f:
+            while True:
+                header = f.readline()
+                if not header:
+                    break
+                parts = header.strip().split()
+                if len(parts) != 2:
+                    continue  # linie invalidă
+                event_id = int(parts[0])
+                num_particles = int(parts[1])
+                particles = []
+                for _ in range(num_particles):
+                    line = f.readline()
+                    if not line:
+                        break
+                    particles.append(line.strip())
+                yield event_id, particles
+    except FileNotFoundError:
+        print("File not found. Please check the file path.")
+        exit()
+    except IOError:
+        print("Error reading the file. Please check the file permissions.")
+        exit()
 
-# TODO: You may use batching (e.g., sum per 1000 events) or sampling (store per-event counts).
-#       Batching is recommended for large files to reduce memory usage.
-#       Sampling (storing per-event counts) is useful if you want to analyze or plot per-event data.
 
-# TODO: After processing, print the total number of positive and negative pions,
-#       their averages per event, Poisson uncertainties, the difference, combined uncertainty, and significance.
-#       Print whether the significance is above the threshold.
+total_pos = 0
+total_neg = 0
+event_count = 0
+batch_pos = []
+batch_neg = []
 
-# TODO: Plot a single graph showing the number of positive and negative pions in each batch of 1000 events.
-#       X-axis: event number (0, 1000, 2000, ...)
-#       Y-axis: number of pions in each batch of 1000 events
-#       The plot should have two lines: one for positive pions, one for negative pions.
+current_batch_pos = 0
+current_batch_neg = 0
 
-# Example expected output (printed):
-# In 500000 total events, we had 9238697 positive particles and 9225784 negative particles.
-# there s an average of  18.477394 particles(positive pions)
-# there s an average of  18.451568 anti-particles(negative pions)
-# the poisson distribution for the positive pions is 3039.52 ...
-# the poisson distribution for the negative(antiparticle) pions is 3037.39 ...
-# there are  12913  more particles then antiparticles
-# the combined uncertainty of the total amount of particles and antiparticles is  4297.03 ...
-# the significance is  3.00 ...
-# the significance is very large compared to the threshold
+for event_id, particles in read_events("_Data/output-Set1.txt"):
+    pos_count = 0
+    neg_count = 0
 
-# Example expected plot:
-# A line plot with two lines (positive and negative pions per 1000 events), x-axis labeled "Event number", y-axis labeled "Number of pions in 1000 events".
+    for p_line in particles:
+        parts = p_line.split()
+        if len(parts) < 4:
+            continue
+        try:
+            pdg_code = int(parts[3])
+        except ValueError:
+            continue
+        type_flag = check_type(pdg_code)
+        if type_flag == 1:
+            pos_count += 1
+        elif type_flag == -1:
+            neg_count += 1
+
+    total_pos += pos_count
+    total_neg += neg_count
+    current_batch_pos += pos_count
+    current_batch_neg += neg_count
+    event_count += 1
+
+
+    if event_count % batch_size == 0:
+        batch_pos.append(current_batch_pos)
+        batch_neg.append(current_batch_neg)
+        current_batch_pos = 0
+        current_batch_neg = 0
+
+
+average_pos = total_pos / event_count
+average_neg = total_neg / event_count
+poisson_pos = poisson_distribution(total_pos)
+poisson_neg = poisson_distribution(total_neg)
+diff = difference(total_pos, total_neg)
+comb_unc = combined_uncertainty(total_pos, total_neg)
+sig = significance(total_pos, total_neg, comb_unc)
+
+
+print(f"In {event_count} total events, we had {total_pos} positive particles and {total_neg} negative particles.")
+print(f"There’s an average of {average_pos:.10f} particles (positive pions) per event.")
+print(f"There’s an average of {average_neg:.10f} antiparticles (negative pions) per event.")
+print(f"The Poisson distribution for the positive pions is {poisson_pos:.10f}")
+print(f"The Poisson distribution for the negative (antiparticle) pions is {poisson_neg:.10f}")
+print(f"There are {diff} more particles than antiparticles.")
+print(f"The combined uncertainty of the total number of particles and antiparticles is {comb_unc:.10f}")
+print(f"The significance of the difference is {sig:.10f}")
+print(f"Difference between positive and negative pions: {diff:.10f}")
+if sig > threshold:
+    print("The significance is very large compared to the threshold.")
+else:
+    print("The significance is not large compared to the threshold.")
+
+
+x_vals = np.arange(0, len(batch_pos)) * batch_size
+plt.plot(x_vals, batch_pos, label="Positive Pions", color="blue")
+plt.plot(x_vals, batch_neg, label="Negative Pions", color="red")
+plt.xlabel("Event number")
+plt.ylabel("Number of pions in 1000 events")
+plt.title("Positive and Negative Pions per 1000 Events")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("Data_Science/table.png")
